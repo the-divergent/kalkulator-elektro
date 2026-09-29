@@ -6,7 +6,7 @@ Terinspirasi filosofi *small modules*: tiap fungsi mengerjakan satu hal dengan b
 
 ## Web App
 
-Buka `web/index.html` di browser (atau hosting via GitHub Pages) — kalkulator interaktif berbahasa Indonesia, responsif untuk HP:
+Buka `docs/index.html` di browser (atau hosting via GitHub Pages) — kalkulator interaktif berbahasa Indonesia, responsif untuk HP:
 - Konversi Satuan SI
 - Desibel (dBm, dBV, rasio)
 - DC: hukum Ohm, seri/paralel, pembagi tegangan
