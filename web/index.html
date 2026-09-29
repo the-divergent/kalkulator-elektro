@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator Elektro</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --acc:#fbbf24; --txt:#e2e8f0; --mut:#94a3b8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font-family:system-ui,-apple-system,sans-serif; padding:16px; max-width:720px; margin:0 auto; }
+  h1 { text-align:center; margin:12px 0 4px; font-size:1.5rem; }
+  h1 span { color:var(--acc); }
+  .sub { text-align:center; color:var(--mut); font-size:.85rem; margin-bottom:16px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:16px; }
+  .tabs button { background:var(--card); color:var(--txt); border:1px solid #334155; border-radius:20px; padding:8px 14px; cursor:pointer; font-size:.85rem; }
+  .tabs button.on { background:var(--acc); color:#111; border-color:var(--acc); font-weight:700; }
+  .panel { display:none; }
+  .panel.on { display:block; }
+  .card { background:var(--card); border-radius:12px; padding:16px; margin-bottom:14px; border:1px solid #334155; }
+  .card h3 { font-size:1rem; margin-bottom:10px; color:var(--acc); }
+  label { display:block; font-size:.8rem; color:var(--mut); margin:8px 0 4px; }
+  input, select { width:100%; padding:10px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:var(--txt); font-size:1rem; }
+  .row { display:flex; gap:8px; }
+  .row > div { flex:1; }
+  button.go { width:100%; margin-top:12px; background:var(--acc); color:#111; font-weight:700; border:none; border-radius:8px; padding:12px; font-size:1rem; cursor:pointer; }
+  .out { margin-top:12px; background:#0f172a; border-radius:8px; padding:12px; font-size:.95rem; line-height:1.7; display:none; border:1px dashed #475569; }
+  .out b { color:var(--acc); }
+  footer { text-align:center; color:var(--mut); font-size:.75rem; margin:24px 0 8px; }
+</style>
+</head>
+<body>
+<h1>⚡ Kalkulator <span>Elektro</span></h1>
+<p class="sub">konversi satuan · DC · AC · desibel · transmisi — v2.0</p>
+
+<div class="tabs" id="tabs"></div>
+<div id="panels"></div>
+
+<footer>Dibuat dengan kalkulator-elektro · github.com/the-divergent/kalkulator-elektro</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (x, d=4) => { if (!isFinite(x)) return "—"; const r = +x.toFixed(d); return Math.abs(r) >= 1e9 || (Math.abs(r) < 1e-4 && r !== 0) ? x.toExponential(3) : r; };
+function show(id, html){ const e = $(id); e.innerHTML = html; e.style.display = "block"; }
+const num = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+
+/* ---------- definisi kalkulator ---------- */
+const CALCS = [
+ { tab:"Satuan", id:"satuan", title:"Konversi Satuan SI",
+   html:`<div class="row"><div><label>Nilai</label><input id="s_n" type="number" value="2.2"></div>
+   <div><label>Dari</label><input id="s_d" list="units" value="kV"></div>
+   <div><label>Ke</label><input id="s_k" list="units" value="V"></div></div>
+   <datalist id="units">${["pV","nV","uV","mV","V","kV","pA","nA","uA","mA","A","kA","mW","W","kW","MW","mJ","J","kJ","mWh","Wh","kWh","mohm","ohm","kohm","Mohm","pF","nF","uF","mF","F","nH","uH","mH","H","Hz","kHz","MHz","GHz","mC","C","mS","S"].map(u=>`<option value="${u}">`).join("")}</datalist>
+   <button class="go" onclick="cSatuan()">Hitung</button><div class="out" id="o_satuan"></div>`,
+   fn(){ const P={p:1e-12,n:1e-9,u:1e-6,m:1e-3,"":1,k:1e3,M:1e6,G:1e9,T:1e12};
+     const B=["Wh","VA","var","ohm","Wb","Hz","V","A","W","J","F","H","C","S"];
+     const urai=s=>{s=s.trim().replace("Ω","ohm");for(const b of B.sort((a,b)=>b.length-a.length)){if(s===b)return["",b];if(s.endsWith(b)){const p=s.slice(0,-b.length);if(p in P)return[p,b];}}return null;};
+     const n=num("s_n"),a=urai($("s_d").value),b=urai($("s_k").value);
+     if(n===null||!a||!b) return show("o_satuan","Input tidak valid.");
+     if(a[1]!==b[1]) return show("o_satuan","Satuan tidak sejenis.");
+     const h=n*P[a[0]]/P[b[0]];
+     show("o_satuan",`<b>${fmt(n)} ${$("s_d").value}</b> = <b>${fmt(h)} ${$("s_k").value}</b>`); } },
+
+ { tab:"Desibel", id:"db", title:"Desibel",
+   html:`<label>dBm → watt / mW</label><div class="row"><div><input id="d_dbm" type="number" value="-5.98" placeholder="dBm"></div></div>
+   <button class="go" onclick="cDbm()">Hitung</button><div class="out" id="o_dbm"></div>
+   <div class="card" style="margin-top:14px"><h3>Rasio → dB</h3>
+   <div class="row"><div><label>P1 / V1</label><input id="d_p1" type="number" value="100"></div><div><label>P2 / V2</label><input id="d_p2" type="number" value="1"></div></div>
+   <div class="row"><div><button class="go" onclick="cDb('p')">dB daya</button></div><div><button class="go" onclick="cDb('v')">dB tegangan</button></div></div>
+   <div class="out" id="o_db"></div></div>
+   <div class="card" style="margin-top:14px"><h3>dBm ↔ dBV</h3>
+   <div class="row"><div><label>Nilai</label><input id="d_v" type="number" value="0"></div><div><label>Impedansi (Ω)</label><input id="d_z" type="number" value="50"></div></div>
+   <div class="row"><div><button class="go" onclick="cDbv(0)">dBm→dBV</button></div><div><button class="go" onclick="cDbv(1)">dBV→dBm</button></div></div>
+   <div class="out" id="o_dbv"></div></div>`,
+   fn(){} },
+
+ { tab:"DC", id:"dc", title:"Hukum Ohm & Rangkaian",
+   html:`<label>Hukum Ohm — isi tepat 2 kolom</label>
+   <div class="row"><div><label>V (volt)</label><input id="h_v" type="number" placeholder="V"></div><div><label>I (ampere)</label><input id="h_i" type="number" placeholder="I"></div></div>
+   <div class="row"><div><label>R (ohm)</label><input id="h_r" type="number" placeholder="R"></div><div><label>P (watt)</label><input id="h_p" type="number" placeholder="P"></div></div>
+   <button class="go" onclick="cOhm()">Selesaikan</button><div class="out" id="o_ohm"></div>
+   <div class="card" style="margin-top:14px"><h3>Seri / Paralel</h3>
+   <label>Nilai (pisahkan koma, mis. 10, 20, 30)</label><input id="s_vals" value="10, 20, 30">
+   <div class="row"><div><button class="go" onclick="cSeriPar('s')">Seri</button></div><div><button class="go" onclick="cSeriPar('p')">Paralel</button></div></div>
+   <div class="out" id="o_sp"></div></div>
+   <div class="card" style="margin-top:14px"><h3>Pembagi Tegangan</h3>
+   <div class="row"><div><label>Vin</label><input id="v_in" type="number" value="12"></div><div><label>R1</label><input id="v_r1" type="number" value="4000"></div><div><label>R2</label><input id="v_r2" type="number" value="8000"></div></div>
+   <button class="go" onclick="cVdiv()">Hitung Vout</button><div class="out" id="o_vdiv"></div></div>`,
+   fn(){} },
+
+ { tab:"Resistor", id:"res", title:"Kode Warna Resistor",
+   html:`<div class="row"><div><label>Pita 1</label><select id="r1"></select></div><div><label>Pita 2</label><select id="r2"></select></div></div>
+   <div class="row"><div><label>Pengali</label><select id="r3"></select></div><div><label>Toleransi</label><select id="r4"></select></div></div>
+   <button class="go" onclick="cRes()">Decode</button><div class="out" id="o_res"></div>
+   <div class="card" style="margin-top:14px"><h3>E12 Terdekat</h3>
+   <label>Nilai target (ohm)</label><input id="e_n" type="number" value="5000">
+   <button class="go" onclick="cE12()">Cari</button><div class="out" id="o_e12"></div></div>`,
+   fn(){ const D=["hitam","coklat","merah","oranye","kuning","hijau","biru","ungu","abu-abu","putih"];
+     const T=["coklat","merah","emas","perak"];
+     const fill=(id,arr)=>{$(id).innerHTML=arr.map(w=>`<option>${w}</option>`).join("");};
+     fill("r1",D);fill("r2",D);fill("r3",D);fill("r4",T);
+     $("r1").value="kuning";$("r2").value="ungu";$("r3").value="merah";$("r4").value="emas"; } },
+
+ { tab:"AC & Daya", id:"ac", title:"AC, Daya & 3-Fasa",
+   html:`<label>Segitiga Daya — isi 2 dari P (W), Q (var), S (VA)</label>
+   <div class="row"><div><label>P</label><input id="a_p" type="number" placeholder="watt"></div><div><label>Q</label><input id="a_q" type="number" placeholder="var"></div><div><label>S</label><input id="a_s" type="number" placeholder="VA"></div></div>
+   <button class="go" onclick="cDaya()">Hitung</button><div class="out" id="o_daya"></div>
+   <div class="card" style="margin-top:14px"><h3>Daya 3-Fasa</h3>
+   <div class="row"><div><label>V line-line</label><input id="t_v" type="number" value="380"></div><div><label>I line</label><input id="t_i" type="number" value="10"></div><div><label>cos φ</label><input id="t_pf" type="number" value="0.85" step="0.01"></div></div>
+   <button class="go" onclick="cTiga()">Hitung P</button><div class="out" id="o_tiga"></div></div>
+   <div class="card" style="margin-top:14px"><h3>Reaktansi & Resonansi</h3>
+   <div class="row"><div><label>f (Hz)</label><input id="x_f" type="number" value="50"></div><div><label>C (µF)</label><input id="x_c" type="number" value="100"></div><div><label>L (mH)</label><input id="x_l" type="number" value="100"></div></div>
+   <button class="go" onclick="cReak()">Hitung</button><div class="out" id="o_reak"></div></div>`,
+   fn(){} },
+
+ { tab:"Transmisi", id:"trx", title:"Transmisi",
+   html:`<h3 style="color:var(--acc);font-size:1rem;margin-bottom:10px">Kapasitas Shannon</h3>
+   <div class="row"><div><label>Bandwidth (MHz)</label><input id="c_b" type="number" value="1"></div><div><label>SNR (dB)</label><input id="c_snr" type="number" value="24"></div></div>
+   <button class="go" onclick="cShannon()">Hitung</button><div class="out" id="o_sh"></div>
+   <div class="card" style="margin-top:14px"><h3>Link Budget</h3>
+   <div class="row"><div><label>Pt (dBm)</label><input id="l_pt" type="number" value="6.02"></div><div><label>Rugi (dB, koma)</label><input id="l_lo" value="12"></div><div><label>Gain (dB, koma)</label><input id="l_ga" value="35"></div></div>
+   <button class="go" onclick="cLink()">Hitung Pr</button><div class="out" id="o_link"></div></div>
+   <div class="card" style="margin-top:14px"><h3>Free-Space Path Loss</h3>
+   <div class="row"><div><label>Jarak (km)</label><input id="f_d" type="number" value="1"></div><div><label>Frekuensi (MHz)</label><input id="f_f" type="number" value="2400"></div></div>
+   <button class="go" onclick="cFspl()">Hitung FSPL</button><div class="out" id="o_fspl"></div></div>`,
+   fn(){} },
+];
+
+/* ---------- fungsi hitung global ---------- */
+function cSatuan(){ CALCS[0].fn(); }
+function cDbm(){ const d=num("d_dbm"); if(d===null)return show("o_dbm","Input tidak valid.");
+  const mw=Math.pow(10,d/10), w=mw/1000;
+  show("o_dbm",`<b>${d} dBm</b> = <b>${fmt(mw)} mW</b> = <b>${fmt(w)} W</b>`); }
+function cDb(t){ const a=num("d_p1"),b=num("d_p2"); if(a===null||b===null||b<=0||a<=0)return show("o_db","Input tidak valid.");
+  const db=t==="p"?10*Math.log10(a/b):20*Math.log10(a/b);
+  show("o_db",`Rasio ${t==="p"?"daya":"tegangan"} = <b>${fmt(db,2)} dB</b>`); }
+function cDbv(dir){ const v=num("d_v"),z=num("d_z")||50; if(v===null)return show("o_dbv","Input tidak valid.");
+  if(dir===0){ const pw=Math.pow(10,v/10)/1000, vv=Math.sqrt(pw*z);
+    show("o_dbv",`<b>${v} dBm</b> @ ${z}Ω = <b>${fmt(20*Math.log10(vv),2)} dBV</b>`); }
+  else { const vv=Math.pow(10,v/20), pw=vv*vv/z;
+    show("o_dbv",`<b>${v} dBV</b> @ ${z}Ω = <b>${fmt(10*Math.log10(pw*1000),2)} dBm</b>`); } }
+function cOhm(){ let V=num("h_v"),I=num("h_i"),R=num("h_r"),P=num("h_p");
+  const k=[[V,"V"],[I,"I"],[R,"R"],[P,"P"]].filter(x=>x[0]!==null);
+  if(k.length!==2) return show("o_ohm","Isi tepat 2 kolom.");
+  const n={}; k.forEach(x=>n[x[1]]=x[0]);
+  if(n.V!==undefined&&n.I!==undefined){R=V/I;P=V*I;}
+  else if(n.V!==undefined&&n.R!==undefined){I=V/R;P=V*V/R;}
+  else if(n.V!==undefined&&n.P!==undefined){I=P/V;R=V*V/P;}
+  else if(n.I!==undefined&&n.R!==undefined){V=I*R;P=I*I*R;}
+  else if(n.I!==undefined&&n.P!==undefined){V=P/I;R=P/(I*I);}
+  else {I=Math.sqrt(P/R);V=Math.sqrt(P*R);}
+  show("o_ohm",`V=<b>${fmt(V)} V</b> · I=<b>${fmt(I)} A</b> · R=<b>${fmt(R)} Ω</b> · P=<b>${fmt(P)} W</b>`); }
+function cSeriPar(t){ const vals=$("s_vals").value.split(",").map(s=>parseFloat(s)).filter(x=>!isNaN(x)&&x>0);
+  if(!vals.length) return show("o_sp","Input tidak valid.");
+  const h=t==="s"?vals.reduce((a,b)=>a+b,0):1/vals.reduce((a,b)=>a+1/b,0);
+  show("o_sp",`Total ${t==="s"?"seri":"paralel"} = <b>${fmt(h)} Ω</b>`); }
+function cVdiv(){ const vi=num("v_in"),r1=num("v_r1"),r2=num("v_r2");
+  if([vi,r1,r2].some(x=>x===null))return show("o_vdiv","Input tidak valid.");
+  show("o_vdiv",`Vout = <b>${fmt(vi*r2/(r1+r2))} V</b>`); }
+function cRes(){ const D={hitam:0,coklat:1,merah:2,oranye:3,kuning:4,hijau:5,biru:6,ungu:7,"abu-abu":8,putih:9};
+  const T={coklat:1,merah:2,emas:5,perak:10};
+  const ohm=(D[$("r1").value]*10+D[$("r2").value])*Math.pow(10,D[$("r3").value]);
+  const f=ohm>=1e6?fmt(ohm/1e6)+" MΩ":ohm>=1e3?fmt(ohm/1e3)+" kΩ":fmt(ohm)+" Ω";
+  show("o_res",`Resistansi = <b>${f}</b> ± <b>${T[$("r4").value]}%</b>`); }
+function cE12(){ const t=num("e_n"); if(t===null||t<=0)return show("o_e12","Input tidak valid.");
+  const E=[10,12,15,18,22,27,33,39,47,56,68,82], ord=Math.pow(10,Math.floor(Math.log10(t)));
+  let best=null; for(const m of [0.1,1,10]) for(const b of E){const c=b*ord*m; if(!best||Math.abs(c-t)<Math.abs(best-t))best=c;}
+  show("o_e12",`E12 terdekat dari ${fmt(t)} Ω = <b>${fmt(best)} Ω</b>`); }
+function cDaya(){ let P=num("a_p"),Q=num("a_q"),S=num("a_s");
+  const k=[P,Q,S].filter(x=>x!==null);
+  if(k.length!==2) return show("o_daya","Isi tepat 2 kolom.");
+  if(P===null)P=Math.sqrt(S*S-Q*Q); if(Q===null)Q=Math.sqrt(S*S-P*P); if(S===null)S=Math.hypot(P,Q);
+  const pf=P/S;
+  show("o_daya",`P=<b>${fmt(P)} W</b> · Q=<b>${fmt(Q)} var</b> · S=<b>${fmt(S)} VA</b> · cos φ=<b>${fmt(pf,3)}</b>`); }
+function cTiga(){ const v=num("t_v"),i=num("t_i"),pf=num("t_pf");
+  if([v,i,pf].some(x=>x===null))return show("o_tiga","Input tidak valid.");
+  show("o_tiga",`P 3-fasa = <b>${fmt(Math.sqrt(3)*v*i*pf)} W</b>`); }
+function cReak(){ const f=num("x_f"),c=num("x_c"),l=num("x_l");
+  if([f,c,l].some(x=>x===null))return show("o_reak","Input tidak valid.");
+  const xc=1/(2*Math.PI*f*c*1e-6), xl=2*Math.PI*f*l*1e-3;
+  const f0=1/(2*Math.PI*Math.sqrt(l*1e-3*c*1e-6));
+  show("o_reak",`Xc=<b>${fmt(xc,2)} Ω</b> · Xl=<b>${fmt(xl,2)} Ω</b> · f₀ resonansi=<b>${fmt(f0,1)} Hz</b>`); }
+function cShannon(){ const b=num("c_b"),s=num("c_snr");
+  if(b===null||s===null)return show("o_sh","Input tidak valid.");
+  const snr=Math.pow(10,s/10), C=b*1e6*Math.log2(1+snr);
+  const m=Math.pow(2,0.5*Math.log2(1+snr)), mp=Math.pow(2,Math.max(1,Math.round(Math.log2(m))));
+  show("o_sh",`C = <b>${fmt(C/1e6,2)} Mbps</b> · level optimal <b>M = ${mp}</b>`); }
+function cLink(){ const pt=num("l_pt"); if(pt===null)return show("o_link","Input tidak valid.");
+  const sum=s=>s.split(",").map(x=>parseFloat(x)).filter(x=>!isNaN(x)).reduce((a,b)=>a+b,0);
+  const pr=pt-sum($("l_lo").value)+sum($("l_ga").value);
+  show("o_link",`Daya terima Pr = <b>${fmt(pr,2)} dBm</b>`); }
+function cFspl(){ const d=num("f_d"),f=num("f_f");
+  if(d===null||f===null||d<=0||f<=0)return show("o_fspl","Input tidak valid.");
+  const L=20*Math.log10(d)+20*Math.log10(f)+32.44;
+  show("o_fspl",`FSPL = <b>${fmt(L,2)} dB</b>`); }
+
+/* ---------- render tabs ---------- */
+(function(){
+  const tabs=$("tabs"), panels=$("panels");
+  CALCS.forEach((c,idx)=>{
+    const b=document.createElement("button"); b.textContent=c.tab;
+    b.onclick=()=>{ document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+      document.querySelectorAll(".panel").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on"); $("p_"+c.id).classList.add("on"); };
+    if(idx===0)b.classList.add("on"); tabs.appendChild(b);
+    const p=document.createElement("div"); p.className="panel"+(idx===0?" on":""); p.id="p_"+c.id;
+    p.innerHTML=`<div class="card"><h3>${c.title}</h3>${c.html}</div>`;
+    panels.appendChild(p); c.fn();
+  });
+})();
+</script>
+</body>
+</html>
